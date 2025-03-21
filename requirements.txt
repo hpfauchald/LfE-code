@@ -1,0 +1,13 @@
+matplotlib==3.10.1
+matplotlib-inline==0.1.7
+numpy==2.2.3
+overrides==7.7.0
+packaging==24.2
+pandas==2.2.3
+python-dateutil==2.9.0.post0
+python-json-logger==3.2.1
+scipy==1.15.2
+statsmodels==0.14.4
+types-python-dateutil==2.9.0.20241206
+typing_extensions==4.12.2
+joblib>=1.2.0
