@@ -2,8 +2,8 @@ import numpy as np
 from sim_cohorts import sim_cohorts
 
 def simulate_single_path(
-    path_index, Nt, dt, rho, nu, Vbar, mu_Y, sigma_Y, sigma_S,
-    bet, That, Npre, tau, IntVec, Delta_s_t, rlog
+    path_index, n_timesteps, dt, rho, nu, Vbar, mu_Y, sigma_Y, sigma_S,
+    bet, build_up_period, n_pre_periods, tau, integration_vector, cohort_beliefs, rlog
 ):
     """
     Runs a single simulation path of the economy.
@@ -16,7 +16,7 @@ def simulate_single_path(
     ----------
     path_index : int
         Index of the simulation path (useful when parallelizing).
-    Nt : int
+    n_timesteps : int
         Number of time steps in the simulation.
     dt : float
         Time increment size (e.g., 1/12 for monthly).
@@ -34,15 +34,15 @@ def simulate_single_path(
         Diffusion of the stock price process (equals sigma_Y in equilibrium).
     bet : float
         Discounting parameter from pre-calculation.
-    That : float
+    build_up_period : float
         Length of pre-trading period in years.
-    Npre : int
+    n_pre_periods : int
         Number of pre-trading steps.
     tau : np.ndarray
         Initial time-since-entry for each cohort.
-    IntVec : np.ndarray
+    integration_vector : np.ndarray
         Initial integration vector for beliefs.
-    Delta_s_t : np.ndarray
+    cohort_beliefs : np.ndarray
         Initial belief values of the cohorts.
     rlog : float
         Log risk-free rate (adjusts expected return).
@@ -57,54 +57,55 @@ def simulate_single_path(
             Market expectation variance over time.
         - Vt : np.ndarray
             Private belief variance over time.
-        - Deltabar2 : np.ndarray
+        - avg_belief_series : np.ndarray
             Mean cohort belief over time.
         - r_t : np.ndarray
             Risk-free rate process over time.
         - theta_t : np.ndarray
             Market price of risk over time.
-        - Zt : np.ndarray
+        - z_t : np.ndarray
             Brownian motion path.
-        - Port : np.ndarray
+        - portfolio_allocation : np.ndarray
             Portfolio allocation (shares in risky asset).
-        - mu_S_adj : np.ndarray
+        - mu_s_adj : np.ndarray
             Adjusted expected return under the true measure.
-        - mu_S_t_adj : np.ndarray
+        - mu_s_t_adj : np.ndarray
             Adjusted expected return under each cohort's belief.
-        - muhat_S_t_adj : np.ndarray
+        - mu_hat_s_t_adj : np.ndarray
             Adjusted consensus belief about expected return.
-        - muC_s_t : np.ndarray
+        - mu_c_t : np.ndarray
             Consumption drift.
-        - sigmaC_s_t : np.ndarray
+        - sigma_c_t : np.ndarray
             Consumption volatility.
-        - f_avg : np.ndarray
+        - weights_avg : np.ndarray
             Average belief weight across cohorts.
-        - corr_muS_muHat : float
+        - corr_mu_s_mu_hat : float
             Correlation between true and consensus beliefs.
     """
     # Generate new shocks
-    dZt = np.sqrt(dt) * np.random.randn(Nt)
-    Zt = np.cumsum(dZt)
-    dZforbias = dZt  # Pre-computed shock series
-    biasvec = dZforbias[-Npre:]
+    dz_t = np.sqrt(dt) * np.random.randn(n_timesteps)
+    z_t = np.cumsum(dz_t)
+    dz_for_bias = dz_t  # Pre-computed shock series
+    bias_vec = dz_for_bias[-n_pre_periods:]
 
     # Simulate this single path
     (
-        Xt2, Deltabar2, Part1, mu_S, mu_S_t, muhat_S_t, r_t, theta_t, Port,
-        muC_s_t, sigmaC_s_t, BIGf, BIGDELTA, Et, Vt, dR
+        xt_series, avg_belief_series, exp_learning_term, mu_s, mu_s_t, mu_hat_s_t,
+        r_t, theta_t, portfolio_allocation, mu_c_t, sigma_c_t,
+        weights_matrix, beliefs_matrix, Et, Vt, dR
     ) = sim_cohorts(
-        biasvec, dZt, Nt, tau, IntVec, Delta_s_t, dt, rho, nu, Vbar,
-        mu_Y, sigma_Y, sigma_S, bet, That, Npre
+        bias_vec, dz_t, n_timesteps, tau, integration_vector, cohort_beliefs, dt,
+        rho, nu, Vbar, mu_Y, sigma_Y, sigma_S, bet, build_up_period, n_pre_periods
     )
 
     # Adjust expected returns
-    mu_S_adj = mu_S + rlog - r_t
-    mu_S_t_adj = mu_S_t + rlog - r_t
-    muhat_S_t_adj = muhat_S_t + rlog - r_t
+    mu_s_adj = mu_s + rlog - r_t
+    mu_s_t_adj = mu_s_t + rlog - r_t
+    mu_hat_s_t_adj = mu_hat_s_t + rlog - r_t
 
     # Return results
     return (
-        dR, Et, Vt, Deltabar2, r_t, theta_t, Zt[:Nt], Port,
-        mu_S_adj, mu_S_t_adj, muhat_S_t_adj, muC_s_t, sigmaC_s_t,
-        np.mean(BIGf, axis=0), np.corrcoef(muhat_S_t, mu_S)[0, 1]
+        dR, Et, Vt, avg_belief_series, r_t, theta_t, z_t[:n_timesteps], portfolio_allocation,
+        mu_s_adj, mu_s_t_adj, mu_hat_s_t_adj, mu_c_t, sigma_c_t,
+        np.mean(weights_matrix, axis=0), np.corrcoef(mu_hat_s_t, mu_s)[0, 1]
     )
