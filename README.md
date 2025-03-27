@@ -26,7 +26,7 @@ Function to perform OLS regressions with GMM-corrected standard errors.
 Used to obtain the regression results in Table 1.
 
 save_plots.py
-Utility function to save the figures automatically as PNG files.
+Function to save the figures automatically as PNG files.
 This function ensures that if a figure already exists, it will be overwritten with the latest version.
 All figures are saved in a figures/ folder created automatically in the directory.
 
