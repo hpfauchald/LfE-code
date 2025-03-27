@@ -70,7 +70,7 @@ def build_up_cohorts(
     yg = (mu_Y - 0.5 * sigma_Y**2) * dt + sigma_Y * dz_t  # Log-growth rate process
     Yt = np.insert(np.exp(np.cumsum(yg)), 0, 1)  # Simulated output
 
-    Xt = np.ones(n_timesteps)
+    Xt = np.ones(n_timesteps) # Initialize total weight on beliefs (denominator of Eq. 2.6)
     avg_belief = np.zeros(n_timesteps)
     cohort_beliefs = np.array([0.0])  # Initialized as a numpy array
 
@@ -80,6 +80,7 @@ def build_up_cohorts(
     reduction = np.exp(-nu * dt)  # Discounting factor
 
     for i in range(1, n_timesteps):
+        # Initialize total weight on beliefs (denominator of Eq. 2.6)
         Part = integration_vector * np.exp(
             -(rho + 0.5 * cohort_beliefs**2) * dt + cohort_beliefs * dz_t[i - 1]
         )
@@ -90,7 +91,7 @@ def build_up_cohorts(
         integration_vector = np.append(reduction * Part, bet * (1 - reduction) * Xt[i])  # Update integration vector
         normalized_weights = integration_vector / Xt[i]  # Normalize
 
-        # Compute belief updates using the posterior variance function
+        # Bayesian belief update for each cohort (Equation 2.7)
         d_cohort_belief = (
             post_var(sigma_Y, prior_variance, tau) / sigma_Y**2
         ) * (-cohort_beliefs * dt + dz_t[i - 1])

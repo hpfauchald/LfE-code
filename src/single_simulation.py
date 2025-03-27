@@ -89,6 +89,9 @@ def simulate_single_path(
     bias_vec = dz_for_bias[-n_pre_periods:]
 
     # Simulate this single path
+    # Simulate the full economic path for a single realization using the core model dynamics.
+    # This function implements the learning-from-experience framework outlined in Section 2 of the paper.
+    # It maps Equations (2.1)–(2.17)
     (
         xt_series, avg_belief_series, exp_learning_term, mu_s, mu_s_t, mu_hat_s_t,
         r_t, theta_t, portfolio_allocation, mu_c_t, sigma_c_t,

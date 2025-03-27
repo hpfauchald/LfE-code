@@ -3,6 +3,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from build_cohorts import build_up_cohorts
 from olsgmm import olsgmm
 from save_plots import save_plot
@@ -30,8 +31,10 @@ mu_Y = 0.02
 sigma_Y = 0.033
 sigma_S = sigma_Y
 w = 0.92
+n_jobs = 6
 
 # Pre-calculations
+# From the equilibrium model (Equation 2.12):
 D = rho**2 + 4 * (rho * nu + nu**2) * (1 - w)
 bet = (rho + 2 * nu - np.sqrt(D)) / (2 * nu)
 rlog = rho + mu_Y - sigma_Y**2
@@ -71,11 +74,14 @@ n_samples = 100
 sample_step = int(sample_years * 12)
 
 # Initialize result containers
+# These correspond to values used in Figure 1 and Figure 2
 corr_z_portfolio = np.zeros((n_sim_paths, n_samples))
 corr_z_subjective_return = np.zeros((n_sim_paths, n_samples))
 corr_true_vs_subjective_return = np.zeros((n_sim_paths, n_samples))
 corr_true_vs_consensus_return = np.zeros((n_sim_paths, 1))
 
+# Initialize matrices for storing time series from each simulation path
+# These track cohort beliefs, portfolio allocations, and macro variables
 belief_weight_matrix = np.zeros((n_sim_paths, n_timesteps))
 muC_matrix = np.zeros((n_sim_paths, n_timesteps))
 sigmaC_matrix = np.zeros((n_sim_paths, n_timesteps))
@@ -85,12 +91,12 @@ theta_matrix = np.zeros((n_sim_paths, n_timesteps))
 portfolio_matrix = np.zeros((n_sim_paths, n_timesteps))
 Z_matrix = np.zeros((n_sim_paths, n_timesteps))
 
-# Expected returns
+# Expected return matrices (used in regressions and statistics)
 true_return_matrix = np.zeros((n_sim_paths, n_timesteps))
 subjective_return_matrix = np.zeros((n_sim_paths, n_timesteps))
 consensus_return_matrix = np.zeros((n_sim_paths, n_timesteps))
 
-# Market belief dispersion
+# Market belief dispersion (Eq. 2.12)
 Et_matrix = np.zeros((n_sim_paths, n_timesteps))
 Vt_matrix = np.zeros((n_sim_paths, n_timesteps))
 return_matrix = np.zeros((n_sim_paths, n_timesteps))
@@ -103,8 +109,10 @@ stdC_sample = np.zeros((n_sim_paths, n_samples))
 
 print(f"Running {n_sim_paths} paths in parallel...")
 
-# Parallel simulation
-results = Parallel(n_jobs=6, backend="loky", verbose=10, batch_size="auto")(
+# Run n_sim_paths simulations in parallel using the simulate_single_path function
+# Each simulation produces one full time series of variables like returns, beliefs, etc.
+# This step reflects the stochastic simulation of the full model described in Sections 2.1–2.4
+results = Parallel(n_jobs=n_jobs, backend="loky", verbose=10, batch_size="auto")(
     delayed(simulate_single_path)(
         k,
         n_timesteps,
@@ -123,7 +131,7 @@ results = Parallel(n_jobs=6, backend="loky", verbose=10, batch_size="auto")(
         cohort_beliefs,
         rlog,
     )
-    for k in range(n_sim_paths)
+    for k in tqdm(range(n_sim_paths), desc="Simulating Paths")
 )
 
 # Unpack simulation results
@@ -146,21 +154,26 @@ for k, res in enumerate(results):
         corr_muS_muHat,
     ) = res
 
-    return_matrix[k] = dR
-    Et_matrix[k, :] = Et
-    Vt_matrix[k, :] = Vt
-    avg_belief_matrix[k, :] = avg_belief_series
-    r_matrix[k, :] = r_t
-    theta_matrix[k, :] = theta_t
-    Z_matrix[k, :] = Zt_k
-    portfolio_matrix[k, :] = portfolio
-    true_return_matrix[k, :] = mu_S_adj
-    subjective_return_matrix[k, :] = mu_S_t_adj
-    consensus_return_matrix[k, :] = muhat_S_t_adj
-    muC_matrix[k, :] = muC_s_t
-    sigmaC_matrix[k, :] = sigmaC_s_t
-    belief_weight_matrix[k, :] = f_avg
-    corr_true_vs_consensus_return[k] = corr_muS_muHat
+    # Store simulation results path-by-path into large matrices
+    # These matrices will later be used to compute empirical moments, correlations, and figures
+    return_matrix[k] = dR                            # Realized excess returns
+    Et_matrix[k, :] = Et                             # Market-level learning variance (belief heterogeneity)
+    Vt_matrix[k, :] = Vt                             # Subjective belief variance
+    avg_belief_matrix[k, :] = avg_belief_series      # Cohort-averaged belief Δ̄ₜ
+    r_matrix[k, :] = r_t                             # Risk-free rate
+    theta_matrix[k, :] = theta_t                     # Sharpe ratio (price of risk)
+    Z_matrix[k, :] = Zt_k                             # Cumulative Brownian motion path z_t
+    portfolio_matrix[k, :] = portfolio               # Optimal portfolio allocation πₛ,ₜ
+
+    true_return_matrix[k, :] = mu_S_adj              # Adjusted expected return under true measure
+    subjective_return_matrix[k, :] = mu_S_t_adj      # Adjusted expected return under subjective beliefs
+    consensus_return_matrix[k, :] = muhat_S_t_adj    # Cross-sectional expected return μ̂^S_t
+
+    muC_matrix[k, :] = muC_s_t                       # Drift of log consumption
+    sigmaC_matrix[k, :] = sigmaC_s_t                 # Volatility of log consumption
+    belief_weight_matrix[k, :] = f_avg               # Final cohort weights f_τ,t
+    corr_true_vs_consensus_return[k] = corr_muS_muHat  # Correlation of μ^S_t and μ̂^S_t
+
 
 # Sample stats loop
 for k in range(n_sim_paths):
